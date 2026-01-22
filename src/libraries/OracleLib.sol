@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {
-    AggregatorV3Interface
-} from "../interfaces/AggregatorV3Interface.sol";
+import {AggregatorV3Interface} from "../interfaces/AggregatorV3Interface.sol";
 
 library OracleLib {
     error OracleLib__StalePrice();
