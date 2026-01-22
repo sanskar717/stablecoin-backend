@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {
     AggregatorV3Interface
-} from "../../lib/chainlink-brownie-contracts/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+} from "../interfaces/AggregatorV3Interface.sol";
 
 library OracleLib {
     error OracleLib__StalePrice();
