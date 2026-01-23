@@ -264,10 +264,18 @@ contract DSCEngine is ReentrancyGuard {
         s_collateralDeposited[from][tokenCollateralAddress] -= amountCollateral;
         emit CollateralRedeemed(from, to, tokenCollateralAddress, amountCollateral);
 
-        bool success = IERC20(tokenCollateralAddress).transfer(to, amountCollateral);
-        if (!success) {
-            revert DSCEngine__TransferFailed();
+        if (tokenCollateralAddress == address(0)) {
+            (bool success,) = payable(to).call{value: amountCollateral}("");
+            if (!success) {
+                revert DSCEngine__TransferFailed();
+            }
+        } else {
+            bool success = IERC20(tokenCollateralAddress).transfer(to, amountCollateral);
+            if (!success) {
+                revert DSCEngine__TransferFailed();
+            }
         }
+
     }
 
     function _burnDSC(uint256 amountDSCToBurn, address onBehalfOf, address DSCFrom) private {
