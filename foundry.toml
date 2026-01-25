@@ -4,11 +4,13 @@ out = "out"
 libs = ["lib"]
 solc = "0.8.20"
 remappings = [
-     "@chainlink/contracts=/lib/chainlink-brownie-contracts/contracts/", "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
+     "@chainlink/contracts=/lib/chainlink-brownie-contracts/contracts/", 
+     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+     "@uniswap/v3-periphery/=lib/v3-periphery/",
+     "@uniswap/v3-core/=lib/v3-core/contracts/"
 ]
 
 [invariant]
 runs = 128
 depth = 128
-
 fail_on_revert = true

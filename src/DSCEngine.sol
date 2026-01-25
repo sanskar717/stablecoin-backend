@@ -7,6 +7,20 @@ import {DecentralizedStableCoin} from "./DecentralizedStableCoin.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+interface IUniswapV2Router {
+    function swapETHForExactTokens(uint256 amountOut, address[] calldata path, address to, uint256 deadline)
+        external
+        payable
+        returns (uint256[] memory amounts);
+}
+
+interface IWETH {
+    function deposit() external payable;
+    function withdraw(uint256) external;
+    function approve(address, uint256) external returns (bool);
+    function balanceOf(address) external view returns (uint256);
+}
+
 /**
  * @title DSCEngine
  * @author sanskar gupta
@@ -40,6 +54,8 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__MintFailed();
     error DSCEngine__HealthFactorOk();
     error DSCEngine__HealthFactorNotImproved();
+    error DSCEngine__InsufficientETHSent();
+    error DSCEngine__InsufficientDebt();
 
     ///////////
     // Types //
@@ -57,6 +73,10 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant LIQUIDATION_PRECISION = 100;
     uint256 private constant MIN_HEALTH_FACTOR = 1e18;
     uint256 private constant LIQUIDATION_BONUS = 10;
+
+    address public constant UNISWAP_ROUTER = 0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008;
+    address public constant WETH = 0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14;
+    address public constant USDC = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
@@ -132,6 +152,8 @@ contract DSCEngine is ReentrancyGuard {
         emit CollateralDeposited(msg.sender, address(0), msg.value);
     }
 
+    receive() external payable {}
+
     function depositCollateralAndMintDSC(
         address tokenCollateralAddress,
         uint256 amountCollateral,
@@ -159,7 +181,7 @@ contract DSCEngine is ReentrancyGuard {
         if (!success) {
             revert DSCEngine__TransferFailed();
         }
-    } // *
+    }
 
     /*
      * @param tokenCollateralAddress The collateral address to redeem
@@ -254,6 +276,76 @@ contract DSCEngine is ReentrancyGuard {
         _revertIfHealthFactorIsBroken(msg.sender);
     }
 
+    /**
+     * @notice Repay DSC debt using native ETH
+     * @param dscAmountToRepay Amount of DSC debt to repay
+     * @dev Automatically swaps ETH → USDC → Repays DSC
+     */
+
+    function repayDSCWithETH(uint256 dscAmountToRepay) external payable moreThanZero(dscAmountToRepay) nonReentrant {
+        if (s_DSCMinted[msg.sender] < dscAmountToRepay) {
+            revert DSCEngine__InsufficientDebt();
+        }
+        if (msg.value == 0) {
+            revert DSCEngine__InsufficientETHSent();
+        }
+
+        IUniswapV2Router router = IUniswapV2Router(UNISWAP_ROUTER);
+
+        address[] memory path = new address[](2);
+        path[0] = WETH;
+        path[1] = USDC;
+
+        router.swapETHForExactTokens{value: msg.value}(dscAmountToRepay, path, address(this), block.timestamp + 300);
+
+        _burnDSC(dscAmountToRepay, msg.sender, msg.sender);
+
+        uint256 balance = address(this).balance;
+        if (balance > 0) {
+            (bool success,) = payable(msg.sender).call{value: balance}("");
+            require(success, "ETH refund failed");
+        }
+
+        _revertIfHealthFactorIsBroken(msg.sender);
+    }
+
+    /**
+     * @notice Repay DSC using ETH (Testnet version - no Uniswap)
+     * @dev Direct ETH payment, calculates value based on oracle price
+     * @param dscAmountToRepay Amount of DSC to repay
+     */
+    function repayDSCWithETHDirect(uint256 dscAmountToRepay)
+        external
+        payable
+        moreThanZero(dscAmountToRepay)
+        nonReentrant
+    {
+        if (s_DSCMinted[msg.sender] < dscAmountToRepay) {
+            revert DSCEngine__InsufficientDebt();
+        }
+        if (msg.value == 0) {
+            revert DSCEngine__InsufficientETHSent();
+        }
+
+        uint256 ethPriceInUSD = _getETHPriceInUSD();
+        uint256 requiredETH = (dscAmountToRepay * PRECISION) / ethPriceInUSD;
+
+        uint256 minRequired = (requiredETH * 95) / 100;
+        if (msg.value < minRequired) {
+            revert DSCEngine__InsufficientETHSent();
+        }
+
+        s_DSCMinted[msg.sender] -= dscAmountToRepay;
+
+        uint256 excess = msg.value - requiredETH;
+        if (excess > 0) {
+            (bool success,) = payable(msg.sender).call{value: excess}("");
+            require(success, "ETH refund failed");
+        }
+
+        _revertIfHealthFactorIsBroken(msg.sender);
+    }
+
     ////////////////////////
     // Private  Functions //
     ////////////////////////
@@ -275,7 +367,6 @@ contract DSCEngine is ReentrancyGuard {
                 revert DSCEngine__TransferFailed();
             }
         }
-
     }
 
     function _burnDSC(uint256 amountDSCToBurn, address onBehalfOf, address DSCFrom) private {
@@ -456,6 +547,26 @@ contract DSCEngine is ReentrancyGuard {
 
     function getHealthFactor(address user) external view returns (uint256) {
         return _healthFactor(user);
+    }
+
+    /**
+     * @notice Calculate ETH needed to repay given DSC amount
+     * @param dscAmount Amount of DSC to repay
+     * @return ethNeeded Estimated ETH required (with 5% buffer)
+     */
+
+    function getETHRequiredForDSCRepayment(uint256 dscAmount) external view returns (uint256 ethNeeded) {
+        uint256 ethPriceInUSD = _getETHPriceInUSD();
+
+        uint256 baseEthNeeded = (dscAmount * PRECISION) / ethPriceInUSD;
+
+        ethNeeded = (baseEthNeeded * 105) / 100;
+
+        return ethNeeded;
+    }
+
+    function getETHPriceInUSD() external view returns (uint256) {
+        return _getETHPriceInUSD();
     }
 
     function getAccountInfo(address user) external view returns (uint256 totalDSCMinted, uint256 collateralValueInUSD) {
