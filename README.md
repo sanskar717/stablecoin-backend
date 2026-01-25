@@ -1,47 +1,54 @@
-# DSC Backend (Decentralized Stablecoin)
+# 🏦 Decentralized Stablecoin Backend (DSC Engine)
 
-This repository contains the **smart contract backend** for a decentralized, overcollateralized stablecoin system built using **Solidity** and **Foundry**.
-
-The project is inspired by modern DeFi protocols and is being developed as part of an **ETHGlobal hackathon**.
+This repository contains the smart contract backend for a decentralized stablecoin (DSC) system built using [Foundry](https://book.getfoundry.sh/) and Solidity. It is designed to maintain price stability through collateralized minting, robust oracle integration, and DAO-grade safety mechanisms.
 
 ---
 
-## 🧠 Project Overview
+## ⚙️ Architecture Overview
 
-The goal of this project is to build a **decentralized stablecoin (DSC)** that:
-- Is backed by crypto collateral (e.g. ETH)
-- Uses on-chain price feeds (Chainlink)
-- Allows users to:
-  - Deposit collateral
-  - Mint stablecoins
-  - Repay debt
-  - Withdraw collateral
-- Maintains protocol safety using a **health factor**
+- **Stablecoin Logic**: `DecentralizedStableCoin.sol` — ERC20-compliant token with mint/redeem logic.
+- **Engine Core**: `DSCEngine.sol` — handles collateral deposits, debt tracking, and health factor enforcement.
+- **Oracle Integration**: `OracleLib.sol` — fetches price feeds via Chainlink and ensures safe conversions.
+- **Interfaces**: `AggregatorV3Interface.sol` — Chainlink-compatible interface for price data.
 
 ---
 
-## 🏗️ Architecture (Planned)
+## 🧪 Testing Strategy
 
-- **DSC Token**
-  - ERC20 stablecoin
-  - Minted and burned by the engine contract
+Tests are written using Foundry’s Forge framework and cover:
 
-- **DSC Engine**
-  - Core protocol logic
-  - Handles collateral deposits, minting, repayment, and liquidation
-  - Integrates Chainlink price feeds
+- ✅ **Unit Tests**: `DSCEngineTest.t.sol` — core logic validation.
+- 🔁 **Fuzz Tests**: `Handler.t.sol`, `InvariantsTest.t.sol` — randomized edge case simulation.
+- 🧸 **Mocks**: simulate ERC20 tokens, price feeds, and failure scenarios.
 
-- **Price Feeds**
-  - Chainlink AggregatorV3Interface
-  - Used for real-time collateral valuation
+src/
+├── interfaces/
+├── libraries/
+out/
+├── script/
+test/
+├── unit/
+├── fuzz/
+├── mocks/
+.env
+.gitignore
+foundry.lock
+
+
+Test folders:
+test/
+├── unit/
+├── fuzz/
+└── mocks/
 
 ---
 
-## 🛠️ Tech Stack
+## 🚀 Deployment Scripts
 
-- **Solidity** `^0.8.x`
-- **Foundry** (forge, cast)
-- **OpenZeppelin Contracts**
-- **Chainlink Price Feeds**
+Foundry script-based deployment:
+- `DeployDSC.s.sol` — deploys core contracts.
+- `HelperConfig.s.sol` — manages network-specific config (e.g., price feed addresses).
 
----
+Run with:
+```bash
+forge script script/DeployDSC.s.sol --broadcast --verify
