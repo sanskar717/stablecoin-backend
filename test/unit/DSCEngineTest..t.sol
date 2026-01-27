@@ -140,8 +140,8 @@ contract DSCEngineTest is Test {
 
     function testeRevertsIfMintedDSCBreaksHealthFactor() public {
         (, int256 price,,,) = MockV3Aggregator(ethUSDPriceFeed).latestRoundData();
-        amountToMint = (amountCollateral * (uint256(price) * engine.getAdditionalFeedPrecision()))
-            / engine.getPrecision();
+        amountToMint =
+            (amountCollateral * (uint256(price) * engine.getAdditionalFeedPrecision())) / engine.getPrecision();
         vm.startPrank(USER);
         ERC20Mock(weth).approve(address(engine), amountCollateral);
 
@@ -201,8 +201,8 @@ contract DSCEngineTest is Test {
 
     function testRevertsIfMintAMountBreaksHealthFactor() public depositedCollateral {
         (, int256 price,,,) = MockV3Aggregator(ethUSDPriceFeed).latestRoundData();
-        amountToMint = (amountCollateral * (uint256(price) * engine.getAdditionalFeedPrecision()))
-            / engine.getPrecision();
+        amountToMint =
+            (amountCollateral * (uint256(price) * engine.getAdditionalFeedPrecision())) / engine.getPrecision();
 
         vm.startPrank(USER);
         uint256 expectedHealthFactor =

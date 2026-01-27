@@ -30,25 +30,19 @@ contract Handler is Test {
         dsc = _dsc;
 
         address[] memory collateralTokens = engine.getCollateralTokens();
-        weth = ERC20Mock(collateralTokens[1]); 
-        wbtc = ERC20Mock(collateralTokens[2]); 
+        weth = ERC20Mock(collateralTokens[1]);
+        wbtc = ERC20Mock(collateralTokens[2]);
 
-        ethUSDPriceFeed = MockV3Aggregator(
-            engine.getCollateralTokenPriceFeed(address(weth))
-        );
+        ethUSDPriceFeed = MockV3Aggregator(engine.getCollateralTokenPriceFeed(address(weth)));
     }
 
     function mintDSC(uint256 amount, uint256 addressSeed) public {
         if (userWithColateralDeposited.length == 0) {
             return;
         }
-        address sender = userWithColateralDeposited[
-            addressSeed % userWithColateralDeposited.length
-        ];
-        (uint256 totalDSCMinted, uint256 collateralvalueInUSD) = engine
-            .getAccountInformation(sender);
-        int256 maxDSCtoMint = (int256(collateralvalueInUSD) / 2) -
-            int256(totalDSCMinted);
+        address sender = userWithColateralDeposited[addressSeed % userWithColateralDeposited.length];
+        (uint256 totalDSCMinted, uint256 collateralvalueInUSD) = engine.getAccountInformation(sender);
+        int256 maxDSCtoMint = (int256(collateralvalueInUSD) / 2) - int256(totalDSCMinted);
         if (maxDSCtoMint < 0) {
             return;
         }
@@ -62,10 +56,7 @@ contract Handler is Test {
         timesMintisCalled++;
     }
 
-    function depositCollateral(
-        uint256 collateralSeed,
-        uint256 amountCollateral
-    ) public {
+    function depositCollateral(uint256 collateralSeed, uint256 amountCollateral) public {
         ERC20Mock collateral = _getCollateralFromSeed(collateralSeed);
         amountCollateral = bound(amountCollateral, 1, MAX_DEPOSIT_SIZE);
 
@@ -77,15 +68,9 @@ contract Handler is Test {
         userWithColateralDeposited.push(msg.sender);
     }
 
-    function redeemCollateral(
-        uint256 collateralSeed,
-        uint256 amountCollateral
-    ) public {
+    function redeemCollateral(uint256 collateralSeed, uint256 amountCollateral) public {
         ERC20Mock collateral = _getCollateralFromSeed(collateralSeed);
-        uint256 maxCollateralToRedeem = engine.getCollateralBalanceOfUser(
-            address(collateral),
-            msg.sender
-        );
+        uint256 maxCollateralToRedeem = engine.getCollateralBalanceOfUser(address(collateral), msg.sender);
 
         amountCollateral = bound(amountCollateral, 0, maxCollateralToRedeem);
         if (amountCollateral == 0) {
@@ -94,9 +79,7 @@ contract Handler is Test {
         engine.redeemCollateral(address(collateral), amountCollateral);
     }
 
-    function _getCollateralFromSeed(
-        uint256 collateralSeed
-    ) private view returns (ERC20Mock) {
+    function _getCollateralFromSeed(uint256 collateralSeed) private view returns (ERC20Mock) {
         if (collateralSeed % 2 == 0) {
             return weth;
         }
@@ -116,7 +99,7 @@ contract Invariants is StdInvariant, Test {
     function setUp() external {
         deployer = new DeployDSC();
         (dsc, engine, config) = deployer.run();
-        (, , weth, wbtc, ) = config.activeNetworkConfig();
+        (,, weth, wbtc,) = config.activeNetworkConfig();
         handler = new Handler(engine, dsc);
         targetContract(address(handler));
     }

@@ -34,7 +34,6 @@ contract Handler is Test {
         ethUSDPriceFeed = MockV3Aggregator(engine.getCollateralTokenPriceFeed(address(weth)));
     }
 
-
     function mintDSC(uint256 amount, uint256 addressSeed) public {
         if (userWithColateralDeposited.length == 0) {
             return;
@@ -77,7 +76,6 @@ contract Handler is Test {
         }
         engine.redeemCollateral(address(collateral), amountCollateral);
     }
-
 
     function _getCollateralFromSeed(uint256 collateralSeed) private view returns (ERC20Mock) {
         if (collateralSeed % 2 == 0) {
