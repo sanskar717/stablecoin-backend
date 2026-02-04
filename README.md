@@ -134,7 +134,7 @@ MIN_HEALTH_FACTOR = 1.0e18     // Minimum health factor before liquidation
 
 ## 🧪 Testing Strategy
 
-### **Unit Tests** (56 tests - ALL PASSING ✅)
+### **Unit Tests** (61 tests - ALL PASSING ✅)
 
 **Categories:**
 
@@ -357,7 +357,6 @@ Issues and pull requests welcome! Please:
 For questions or issues:
 - Open a GitHub issue
 - Email: sanskar.gupta@example.com
-- Discord: [Link to community]
 
 ---
 
