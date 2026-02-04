@@ -534,4 +534,173 @@ contract DSCEngineTest is Test {
         uint256 actualLiquidationPrecision = engine.getliquidationPercision();
         assertEq(actualLiquidationPrecision, expectedLiquidationPrecision);
     }
+
+    ////////////////////////////
+    //  depositETHOnly Tests  //
+    ////////////////////////////
+
+    function testCanDepositETHOnly() public {
+        uint256 ethAmount = 5 ether;
+        vm.deal(USER, ethAmount);
+
+        vm.startPrank(USER);
+        engine.depositETHOnly{value: ethAmount}();
+        vm.stopPrank();
+
+        uint256 collateralBalance = engine.getCollateralBalanceOfUser(USER, address(0));
+        assertEq(collateralBalance, ethAmount);
+    }
+
+    function testCannotDepositZeroETH() public {
+        vm.startPrank(USER);
+        vm.expectRevert(DSCEngine.DSCEngine__NeedsMoreThanZero.selector);
+        engine.depositETHOnly{value: 0}();
+        vm.stopPrank();
+    }
+
+    function testDepositETHOnlyDoesNotMintDSC() public {
+        uint256 ethAmount = 5 ether;
+        vm.deal(USER, ethAmount);
+
+        vm.startPrank(USER);
+        engine.depositETHOnly{value: ethAmount}();
+        vm.stopPrank();
+
+        uint256 dscBalance = dsc.balanceOf(USER);
+        assertEq(dscBalance, 0);
+    }
+
+    function testReceiveFunctionWorksWithETH() public {
+        uint256 ethAmount = 2 ether;
+        vm.deal(USER, ethAmount);
+
+        vm.startPrank(USER);
+        (bool success,) = address(engine).call{value: ethAmount}("");
+        require(success, "ETH transfer failed");
+        vm.stopPrank();
+
+        uint256 engineBalance = address(engine).balance;
+        assertEq(engineBalance, ethAmount);
+    }
+
+    //////////////////////////////////
+    //  getMaxMintableAmount Tests  //
+    //////////////////////////////////
+
+    function testGetMaxMintableAmount() public {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(engine), amountCollateral);
+        engine.depositCollateral(weth, amountCollateral);
+
+        uint256 maxMintable = engine.getMaxMintableAmount(USER);
+
+        uint256 expectedMax = 10000 ether;
+        assertEq(maxMintable, expectedMax);
+        vm.stopPrank();
+    }
+
+    function testGetMaxMintableAmountAfterPartialMint() public depositedCollateral {
+        vm.startPrank(USER);
+        uint256 maxBefore = engine.getMaxMintableAmount(USER);
+
+        uint256 amountToMintTest = 5000 ether;
+        engine.mintDSC(amountToMintTest);
+
+        uint256 maxAfter = engine.getMaxMintableAmount(USER);
+
+        assertEq(maxAfter, maxBefore - amountToMintTest);
+        vm.stopPrank();
+    }
+
+    function testGetMaxMintableAmountIsZeroWithoutCollateral() public view {
+        uint256 maxMintable = engine.getMaxMintableAmount(USER);
+        assertEq(maxMintable, 0);
+    }
+
+    ///////////////////////////////////////////
+    //  getETHRequiredForDSCRepayment Tests  //
+    ///////////////////////////////////////////
+
+    function testGetETHRequiredForDSCRepayment() public view {
+        uint256 dscAmount = 100 ether;
+        uint256 ethRequired = engine.getETHRequiredForDSCRepayment(dscAmount);
+
+        uint256 expectedEth = (dscAmount * engine.getPrecision()) / engine.getETHPriceInUSD();
+        uint256 expectedWithBuffer = (expectedEth * 105) / 100;
+
+        assertEq(ethRequired, expectedWithBuffer);
+    }
+
+    function testGetETHPriceInUSD() public view {
+        uint256 ethprice = engine.getETHPriceInUSD();
+        uint256 expectedPrice = 2000e18;
+        assertEq(ethprice, expectedPrice);
+    }
+
+    function testGetAccountInfo() public depositedCollateralAndMintedDSC {
+        (uint256 totalDSCMinted, uint256 collateralValueInUSD) = engine.getAccountInfo(USER);
+
+        assertEq(totalDSCMinted, amountToMint);
+        assertEq(collateralValueInUSD, engine.getUSDValue(weth, amountCollateral));
+    }
+
+    function testRepayDSCWithETHDirectPartialRepayment() public {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(engine), amountCollateral);
+        engine.depositCollateralAndMintDSC(weth, amountCollateral, 200 ether);
+
+        uint256 ethRequired = engine.getETHRequiredForDSCRepayment(100 ether);
+        vm.deal(USER, ethRequired + 1 ether);
+
+        engine.repayDSCWithETHDirect{value: ethRequired}(100 ether);
+        vm.stopPrank();
+
+        (uint256 dscMinted,) = engine.getAccountInformation(USER);
+        assertEq(dscMinted, 100 ether);
+    }
+
+    ///////////////////////////////////////////////////
+    //  redeemCollateralForDSC Multiple Collaterals  //
+    ///////////////////////////////////////////////////
+
+    function testRedeemCollateralForDSCWithMultipleCollateralTypes() public {
+        vm.startPrank(USER);
+
+        ERC20Mock(weth).approve(address(engine), amountCollateral);
+        ERC20Mock(wbtc).approve(address(engine), amountCollateral);
+
+        engine.depositCollateral(weth, amountCollateral);
+        engine.depositCollateral(wbtc, amountCollateral);
+
+        engine.mintDSC(amountToMint);
+
+        dsc.approve(address(engine), amountToMint);
+
+        engine.redeemCollateralForDSC(weth, amountCollateral / 2, amountToMint / 2);
+        engine.redeemCollateralForDSC(wbtc, amountCollateral / 2, amountToMint / 2);
+
+        vm.stopPrank();
+
+        (uint256 totalDSCMinted,) = engine.getAccountInformation(USER);
+        assertEq(totalDSCMinted, 0);
+
+        uint256 wethBalance = engine.getCollateralBalanceOfUser(USER, weth);
+        uint256 wbtcBalance = engine.getCollateralBalanceOfUser(USER, wbtc);
+
+        assertEq(wethBalance, amountCollateral / 2);
+        assertEq(wbtcBalance, amountCollateral / 2);
+    }
+
+    function testDepositETHAndCheckBalance() public {
+        uint256 ethAmount = 3 ether;
+        vm.deal(USER, ethAmount);
+
+        vm.startPrank(USER);
+        engine.depositETHOnly{value: ethAmount}();
+        vm.stopPrank();
+
+        uint256 balance = engine.getCollateralBalanceOfUser(USER, address(0));
+        assertEq(balance, ethAmount);
+    }
 }
+
