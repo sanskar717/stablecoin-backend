@@ -81,6 +81,7 @@ contract DSCEngine is ReentrancyGuard {
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
     mapping(address user => uint256 amountDSCMinted) private s_DSCMinted;
+    mapping(address user => uint256) private s_userCollateralToDebtRatio;
     address[] private s_collateralTokens;
 
     DecentralizedStableCoin private immutable i_dsc;
@@ -224,6 +225,13 @@ contract DSCEngine is ReentrancyGuard {
     function mintDSC(uint256 amountDSCToMint) public moreThanZero(amountDSCToMint) nonReentrant {
         s_DSCMinted[msg.sender] += amountDSCToMint;
 
+        uint256 userCollateral = s_collateralDeposited[msg.sender][address(0)];
+        uint256 userDebt = s_DSCMinted[msg.sender];
+
+        if(userDebt > 0){
+            s_userCollateralToDebtRatio[msg.sender] = (userCollateral * PRECISION) / userDebt;
+        }
+
         _revertIfHealthFactorIsBroken(msg.sender);
 
         bool minted = i_dsc.mint(msg.sender, amountDSCToMint);
@@ -327,11 +335,12 @@ contract DSCEngine is ReentrancyGuard {
             revert DSCEngine__InsufficientETHSent();
         }
 
-        uint256 ethPriceInUSD = _getETHPriceInUSD();
-        uint256 requiredETH = (dscAmountToRepay * PRECISION) / ethPriceInUSD;
+        // uint256 ethPriceInUSD = _getETHPriceInUSD();
+        uint256 collateralPerDSC = s_userCollateralToDebtRatio[msg.sender];
+        uint256 requiredETH = (dscAmountToRepay * collateralPerDSC) / PRECISION;
 
-        uint256 minRequired = (requiredETH * 95) / 100;
-        if (msg.value < minRequired) {
+        // uint256 minRequired = (requiredETH * 95) / 100;
+        if (msg.value < requiredETH) {
             revert DSCEngine__InsufficientETHSent();
         }
 
